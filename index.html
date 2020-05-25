@@ -1,0 +1,180 @@
+<!doctype html>
+<html class="no-js" lang="">
+<head><title>Solar system</title>
+<style>
+  canvas {
+    border:1px solid #d3d3d3;
+    background-color: #f1f1f1;
+  }
+</style>
+<script>
+
+function Planet(name, style, m, r, x, y, vx, vy) {
+  this.name = name;
+  this.style = style;
+  this.m = m;
+  this.r = r;
+  this.x = x;
+  this.y = y;
+  this.vx = vx;
+  this.vy = vy;
+  this.ax = 0;
+  this.ay = 0;
+}
+
+function sqr(num) {
+  return num*num;
+}
+
+// rotate the planet on the orbit
+function rotatePlanet(planet, angle) {
+  let r = Math.sqrt(sqr(planet.x) + sqr(planet.y));
+  let v = Math.sqrt(sqr(planet.vx) + sqr(planet.vy));
+
+  planet.x = -r * Math.sin(angle);
+  planet.y = r * Math.cos(angle);
+
+  planet.vx = v * Math.cos(angle);
+  planet.vy = v * Math.sin(angle);
+}
+
+// change coordinate system to the mass center
+function stopMassCenter() {
+  let px = 0;
+  let py = 0;
+  let totalMass = 0;
+  for (let i = 0; i < planets.length; i++) {
+    totalMass += planets[i].m;
+    px += planets[i].vx * planets[i].m;
+    py += planets[i].vy * planets[i].m;
+  }
+  for (let i = 0; i < planets.length; i++) {
+    planets[i].vx -= px / totalMass;
+    planets[i].vy -= py / totalMass;
+  }
+}
+
+// Solar system
+const metersPerPixel = 5.0E+9; // space scale
+const hiddenStepsPerSec = 200000; // time scale
+let planets = [
+  new Planet("Sun"            , "orange", m=1.989E+30 , r=6.9634E+8*10, x=0  , y=0                   , vx=0              , vy=0),
+  new Planet("Earth"          , "cyan"  , m=5.972E+24 , r=6.371E+6*500, x=0  , y=1.496E+11           , vx=2.978E+4       , vy=0), // note: Earth_r is *10 to see it
+  new Planet("Jupiter"        , "red"   , m=1.8986E+27, r=6.9911E+7*30, x=0.1, y=7.7857E+11          , vx=1.307E+4       , vy=0),
+  new Planet("Sat grav maneur", "black" , m=1.0E+3    , r=2.0E+9      , x=0.1, y=1.496E+11 + 6.371E+6, vx=2.978E+4+1.5E+4, vy=0),
+];
+rotatePlanet(planets[2], -0.92); // rotate Jupiter
+
+// Earth system
+// const metersPerPixel = 1.0E+5; // space scale
+// const hiddenStepsPerSec = 20; // time scale
+// let planets = [
+//   new Planet("Earth"        , "cyan"    , m=5.972E+24, r=6.371E+6 , x=0   , y=0            , vx=0       , vy=0),
+//   new Planet("Moon"         , "magenta" , m=7.36E+22 , r=1.7371E+6, x=0   , y=3.844E+8     , vx=1.023E+3, vy=0),
+//   new Planet("Sat 1st space", "black"   , m=1.0E+3   , r=1.0E+5   , x=0   , y=6.371E+6*1.01, vx=7.91E+3 , vy=0),
+//   new Planet("Sat 2nd space", "red"     , m=1.0E+3   , r=1.0E+5   , x=0.1 , y=6.371E+6*1.01, vx=1.12E+4 , vy=0),
+// ];
+
+stopMassCenter();
+
+const G = 6.67408E-11;
+let dt = 3.0E+1;
+let minDist;
+function newPos() {
+
+  // calculate acceleration for each planet
+  // also find the minimal distance between planets
+  for (let i=0; i<planets.length; i++) {
+    planets[i].ax = 0;
+    planets[i].ay = 0;
+  }
+  minDist = Number.MAX_VALUE;
+  for (let i=0; i<planets.length; i++) {
+    for (let j=i+1; j<planets.length; j++) {
+      let dist2 = (sqr(planets[j].x - planets[i].x) + sqr(planets[j].y - planets[i].y));
+      let dist32 = dist2 * Math.sqrt(dist2); // dist^(3/2)
+      let f = G * planets[i].m * planets[j].m / dist2;
+
+      planets[i].ax += G * planets[j].m * (planets[j].x - planets[i].x) / dist32;
+      planets[j].ax -= G * planets[i].m * (planets[j].x - planets[i].x) / dist32;
+
+      planets[i].ay += G * planets[j].m * (planets[j].y - planets[i].y) / dist32;
+      planets[j].ay -= G * planets[i].m * (planets[j].y - planets[i].y) / dist32;
+
+      if (minDist > Math.sqrt(dist2)) {
+        minDist = Math.sqrt(dist2);
+      }
+    }
+  }
+
+  // update velocity and coordinates
+  dt = 1.0E-9 * minDist;
+  for (let i=0; i<planets.length; i++) {
+    planets[i].x  += planets[i].vx * dt + planets[i].ax * sqr(dt) / 2;
+    planets[i].vx += planets[i].ax * dt;
+
+    planets[i].y  += planets[i].vy * dt + planets[i].ay * sqr(dt) / 2;
+    planets[i].vy += planets[i].ay * dt;
+  }
+}
+
+
+let canvas;
+let context;
+let transX;
+let transY;
+
+function startGame() {
+
+  const width  = window.innerWidth  || document.documentElement.clientWidth  || document.body.clientWidth;
+  const height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
+
+  canvas = document.createElement("canvas");
+  canvas.width = window.innerWidth - 15;
+  canvas.height = window.innerHeight - 25;
+  document.body.insertBefore(canvas, document.body.childNodes[0]);
+
+  context = canvas.getContext("2d");
+  transX = canvas.width * 0.5;
+  transY = canvas.height * 0.5;
+  context.translate(transX, transY);
+
+  updateGameArea();
+}
+
+function draw() {
+  // clear
+  context.clearRect(-transX, -transY, 200, 70); // clear text only
+  //context.clearRect(-transX, -transY, transX, transY); // clear all screen
+
+
+  // draw new position
+  for (let i=0; i<planets.length; i++) {
+    context.fillStyle = planets[i].style;
+    context.beginPath();
+    context.arc(planets[i].x / metersPerPixel, planets[i].y / metersPerPixel, planets[i].r / metersPerPixel, 0, 2 * Math.PI);
+    context.closePath();
+    context.fill();
+  }
+
+  // draw text
+  str = "dt: " + dt.toExponential(2);
+  context.font = "15px Arial";
+  context.fillText(str, -1 * transX, -1 * transY + 15);
+}
+
+function updateGameArea() {
+
+  draw();
+  for (let i = 0; i < hiddenStepsPerSec / dt; i++) {
+    newPos();
+  }
+
+  // make infinite loop without freezing
+  setTimeout(updateGameArea, 0);
+}
+</script>
+</head>
+<body onload="startGame()">
+</body>
+</html>
