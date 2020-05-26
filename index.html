@@ -2,13 +2,26 @@
 <html class="no-js" lang="">
 <head><title>Solar system</title>
 <style>
+  html {
+    height: 100%;
+  }
+  body {
+    width: 99%;
+    height: 97%;
+  }
+  #control_panel {
+    margin-right: 5px;
+    float: left;
+    width: auto;
+  }
   canvas {
-    border:1px solid #d3d3d3;
+    display:block;
     background-color: #f1f1f1;
   }
 </style>
 <script>
 
+// BEGIN LOGIC
 function Planet(name, style, m, r, x, y, vx, vy) {
   this.name = name;
   this.style = style;
@@ -56,14 +69,14 @@ function stopMassCenter() {
 
 // Solar system
 const metersPerPixel = 5.0E+9; // space scale
-const hiddenStepsPerSec = 200000; // time scale
+const hiddenStepsPerSec = 100000; // time scale
 let planets = [
-  new Planet("Sun"            , "orange", m=1.989E+30 , r=6.9634E+8*10, x=0  , y=0                   , vx=0              , vy=0),
-  new Planet("Earth"          , "cyan"  , m=5.972E+24 , r=6.371E+6*500, x=0  , y=1.496E+11           , vx=2.978E+4       , vy=0), // note: Earth_r is *10 to see it
-  new Planet("Jupiter"        , "red"   , m=1.8986E+27, r=6.9911E+7*30, x=0.1, y=7.7857E+11          , vx=1.307E+4       , vy=0),
-  new Planet("Sat grav maneur", "black" , m=1.0E+3    , r=2.0E+9      , x=0.1, y=1.496E+11 + 6.371E+6, vx=2.978E+4+1.5E+4, vy=0),
+  new Planet("Sun"            , "orange", m=1.989E+30 , r=6.9634E+8*0.3, x=0  , y=0                   , vx=0              , vy=0), // note: Sun_r is *0.3 to see Earth
+  new Planet("Earth"          , "red"   , m=5.972E+24 , r=6.371E+6*10  , x=0  , y=1.496E+11           , vx=2.978E+4       , vy=0), // note: Earth_r is *10 to see it
+  new Planet("Jupiter"        , "blue"  , m=1.8986E+27, r=6.9911E+7    , x=0.1, y=7.7857E+11          , vx=1.307E+4       , vy=0),
+  new Planet("Sat grav maneur", "black" , m=1.0E+3    , r=2.0E+7       , x=0.1, y=1.496E+11 + 6.371E+6, vx=2.978E+4+1.5E+4, vy=0),
 ];
-rotatePlanet(planets[2], -0.92); // rotate Jupiter
+rotatePlanet(planets[2], -0.92); // rotate Jupiter to the point to make gravitational maneuver
 
 // Earth system
 // const metersPerPixel = 1.0E+5; // space scale
@@ -78,6 +91,7 @@ rotatePlanet(planets[2], -0.92); // rotate Jupiter
 stopMassCenter();
 
 const G = 6.67408E-11;
+let time = 0;
 let dt = 3.0E+1;
 let minDist;
 function newPos() {
@@ -93,7 +107,7 @@ function newPos() {
     for (let j=i+1; j<planets.length; j++) {
       let dist2 = (sqr(planets[j].x - planets[i].x) + sqr(planets[j].y - planets[i].y));
       let dist32 = dist2 * Math.sqrt(dist2); // dist^(3/2)
-      let f = G * planets[i].m * planets[j].m / dist2;
+      //let f = G * planets[i].m * planets[j].m / dist2;
 
       planets[i].ax += G * planets[j].m * (planets[j].x - planets[i].x) / dist32;
       planets[j].ax -= G * planets[i].m * (planets[j].x - planets[i].x) / dist32;
@@ -107,7 +121,7 @@ function newPos() {
     }
   }
 
-  // update velocity and coordinates
+  // update velocity, coordinates and time
   dt = 1.0E-9 * minDist;
   for (let i=0; i<planets.length; i++) {
     planets[i].x  += planets[i].vx * dt + planets[i].ax * sqr(dt) / 2;
@@ -116,54 +130,67 @@ function newPos() {
     planets[i].y  += planets[i].vy * dt + planets[i].ay * sqr(dt) / 2;
     planets[i].vy += planets[i].ay * dt;
   }
+
+  time += dt;
 }
+// END LOGIC
 
 
+// BEGIN DRAWING
 let canvas;
 let context;
 let transX;
 let transY;
 
-function startGame() {
+function init() {
 
-  const width  = window.innerWidth  || document.documentElement.clientWidth  || document.body.clientWidth;
-  const height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
-
-  canvas = document.createElement("canvas");
-  canvas.width = window.innerWidth - 15;
+  canvas = document.getElementById("canvas");
+  let controlPanel = document.getElementById("control_panel");
+  canvas.width = window.innerWidth - controlPanel.clientWidth - 20;
   canvas.height = window.innerHeight - 25;
-  document.body.insertBefore(canvas, document.body.childNodes[0]);
 
   context = canvas.getContext("2d");
   transX = canvas.width * 0.5;
   transY = canvas.height * 0.5;
   context.translate(transX, transY);
 
-  updateGameArea();
+  draw();
 }
 
+let isCirclesMode = false;
 function draw() {
   // clear
-  context.clearRect(-transX, -transY, 200, 70); // clear text only
-  //context.clearRect(-transX, -transY, transX, transY); // clear all screen
-
+  if (isCirclesMode) {
+    context.clearRect(-transX, -transY, 2*transX, 2*transY); // clear all screen
+  }
 
   // draw new position
   for (let i=0; i<planets.length; i++) {
     context.fillStyle = planets[i].style;
     context.beginPath();
-    context.arc(planets[i].x / metersPerPixel, planets[i].y / metersPerPixel, planets[i].r / metersPerPixel, 0, 2 * Math.PI);
+    let planetsScale = isCirclesMode ? 300 : 100; // increase size of planets to see them
+    context.arc(planets[i].x / metersPerPixel, planets[i].y / metersPerPixel, planets[i].r / metersPerPixel * planetsScale, 0, 2 * Math.PI);
     context.closePath();
     context.fill();
   }
 
   // draw text
-  str = "dt: " + dt.toExponential(2);
-  context.font = "15px Arial";
-  context.fillText(str, -1 * transX, -1 * transY + 15);
-}
+  document.getElementById("time_sec").innerText = "Time, sec: " + time.toExponential(2);
+  document.getElementById("time_years").innerText = "Time, years: " + (time/(3600*24*365.25)).toExponential(2);
+  document.getElementById("dt").innerText = "dt, sec: " + dt.toExponential(2);
 
+  let satVelocity = Math.sqrt(sqr(planets[3].vx) + sqr(planets[3].vy));
+  document.getElementById("sat_velocity").innerText = "Sat velocity, km/s: " + (satVelocity/1000).toExponential(2);
+}
+// END DRAWING
+
+
+// BEGIN CONTROL
+let isRun = false;
 function updateGameArea() {
+  if (!isRun) {
+    return;
+  }
 
   draw();
   for (let i = 0; i < hiddenStepsPerSec / dt; i++) {
@@ -173,8 +200,42 @@ function updateGameArea() {
   // make infinite loop without freezing
   setTimeout(updateGameArea, 0);
 }
+
+function start() {
+  isRun = !isRun;
+  document.getElementById("button_start").innerText = (isRun ? "Stop" : "Start");
+  if (isRun) {
+    updateGameArea();
+  }
+}
+
+function stop() {
+  isRun = false;
+}
+
+function changeMode(checkbox) {
+  isCirclesMode = document.getElementById("circles").checked;
+}
+// END CONTROL
+
 </script>
 </head>
-<body onload="startGame()">
+<body onload="init()">
+  <div id="control_panel">
+    <span>Solar system simulator</span><br />
+    <span>Gravitational maneuver</span><br /><br />
+
+    <input type="radio" id="orbits" name="mode" value="orbits" onchange="changeMode(this);" checked><label for="orbits">Orbits mode</label><br />
+    <input type="radio" id="circles" name="mode" value="circles" onchange="changeMode(this);"><label for="circles">Circles mode</label><br />
+
+    <button id="button_start" onclick="start();">Start</button><br />
+    <br />
+
+    <span id="time_sec">Time, sec: 0.00e+0</span><br />
+    <span id="time_years">Time, years: 0.00e+0</span><br />
+    <span id="dt">dt, sec: 0.00e+0</span><br />
+    <span id="sat_velocity">Sat velocity, km/s: 0.00e+0</span><br />
+  </div>
+  <canvas id="canvas"></canvas>
 </body>
 </html>
